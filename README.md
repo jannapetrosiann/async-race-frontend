@@ -1,6 +1,9 @@
 # Async Race - Score: 380/400 pts
 
- **Deployed Application**: [Live Demo](https://your-deployment-url.netlify.app)
+##  Live Demo
+[https://cozy-pie-9b3ab9.netlify.app/](https://cozy-pie-9b3ab9.netlify.app/)
+
+## GitHub Repo : https://github.com/jannapetrosiann/async-race-frontend.git
 
 ## About
 A Single Page Application for managing a collection of cars, operating their engines, and showcasing race statistics. Built with React 18+ and TypeScript in strict mode.
