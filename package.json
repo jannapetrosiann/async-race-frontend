@@ -9,8 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "ci:format": "prettier --check \"src/**/*.{ts,tsx,css}\"",
-    "postinstall": "npm install --legacy-peer-deps"
+    "ci:format": "prettier --check \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
