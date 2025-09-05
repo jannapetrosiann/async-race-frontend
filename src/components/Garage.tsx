@@ -8,33 +8,14 @@ import type { Car } from '../types';
 
 export const Garage: React.FC = () => {
   const [cars, setCars] = useState<Car[]>([]);
-  const [totalCars, setTotalCars] = useState(106);
+  const [totalCars, setTotalCars] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedCar, setSelectedCar] = useState<Car | null>(null);
   const [isRacing, setIsRacing] = useState(false);
   const [raceWinner, setRaceWinner] = useState<{ car: Car; time: number; garagePosition: number } | null>(null);
   const [raceStates, setRaceStates] = useState<Record<number, any>>({});
   const [showWinnerPopup, setShowWinnerPopup] = useState(false);
-  const [winnerDeclared, setWinnerDeclared] = useState(false);
-
-  const winnerRef = useRef(false);
-
-  const raceStatesRef = useRef<Record<number, any>>({});
-  const runningRef = useRef<Record<number, boolean>>({});
-  const rafRef = useRef<Record<number, number | null>>({});
-
-  useEffect(() => { raceStatesRef.current = raceStates; }, [raceStates]);
-
-
-  useEffect(() => {
-    return () => {
-      Object.values(rafRef.current).forEach(id => id && cancelAnimationFrame(id));
-    };
-  }, []);
-
-  useEffect(() => { 
-    loadCars(); 
-  }, [currentPage]);
+  const intervals = useRef<Record<number, number | null>>({})
 
   const loadCars = async () => {
     try {
@@ -50,195 +31,129 @@ export const Garage: React.FC = () => {
 
   const createCar = async (name: string, color: string) => {
     if (isRacing) return;
-    try {
-      await api.createCar(name, color);
-      await loadCars();
-    } catch (error) {
-      console.error('Failed to create car:', error);
-    }
+    await api.createCar(name, color);
+    await loadCars();
   };
 
   const updateCar = async (name: string, color: string) => {
     if (!selectedCar || isRacing) return;
-    try {
-      await api.updateCar(selectedCar.id, name, color);
-      setSelectedCar(null);
-      await loadCars();
-    } catch (error) {
-      console.error('Failed to update car:', error);
-    }
+    await api.updateCar(selectedCar.id, name, color);
+    setSelectedCar(null);
+    await loadCars();
   };
 
   const deleteCar = async (id: number) => {
     if (isRacing) return;
-    try {
-      await api.deleteCar(id);
-      await api.deleteWinner(id);
-      await loadCars();
-    } catch (error) {
-      console.error('Failed to delete car:', error);
-    }
+    await api.deleteCar(id);
+    await api.deleteWinner(id);
+    await loadCars();
   };
 
   const generateCars = async () => {
     if (isRacing) return;
-    try {
-      for (let i = 0; i < 100; i++) {
-        const car = generateRandomCar();
-        await api.createCar(car.name, car.color);
-      }
-      await loadCars();
-    } catch (error) {
-      console.error('Failed to generate cars:', error);
+    for (let i = 0; i < 100; i++) {
+      const car = generateRandomCar();
+      await api.createCar(car.name, car.color);
     }
+    await loadCars();
   };
 
   const stopEngine = async (car: Car) => {
-    try {
-      runningRef.current[car.id] = false;
-      if (rafRef.current[car.id]) {
-        cancelAnimationFrame(rafRef.current[car.id]!);
-        rafRef.current[car.id] = null;
-      }
-      await api.stopEngine(car.id);
+    await api.stopEngine(car.id);
+    setRaceStates(prev => ({
+      ...prev,
+      [car.id]: { isRacing: false, progress: 0, finished: false }
+    }));
+  };
+
+  const animateCar = (car: Car, duration: number, garagePosition: number, winnerTaken: { value: boolean }) => {
+    const startTime = Date.now();
+
+    intervals.current[car.id] = window.setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min((elapsed / duration) * 100, 100);
+
       setRaceStates(prev => ({
         ...prev,
-        [car.id]: { isRacing: false, progress: 0, finished: false }
+        [car.id]: { ...prev[car.id], progress, isRacing: progress < 100, finished: progress >= 100 }
       }));
-    } catch (error) {
-      console.error('Failed to stop engine:', error);
-    }
+
+      if (progress >= 100) {
+        clearInterval(intervals.current[car.id]!);
+
+        if (!winnerTaken.value) {
+          winnerTaken.value = true;
+
+
+          Object.values(intervals.current).forEach(i => i && clearInterval(i));
+
+          intervals.current = {}
+          setRaceStates(prev => {
+            const updated: Record<number, any> = {};
+            Object.keys(prev).forEach(id => {
+              updated[+id] = { ...prev[+id], finished: true, isRacing: false, progress: 100 };
+            });
+            return updated;
+          });
+
+          setRaceWinner({ car, time: elapsed / 1000, garagePosition });
+          setShowWinnerPopup(true);
+          setIsRacing(false);
+        }
+      }
+    }, 50);
+  };
+
+
+  const startRace = async () => {
+    setRaceStates({});
+    setIsRacing(true);
+    setRaceWinner(null);
+
+    const winnerTaken = { value: false };
+    const engines = await Promise.all(cars.map(car => api.startEngine(car.id)));
+
+    engines.forEach((engineInfo, index) => {
+      const car = cars[index];
+      if (!car) return;
+      const duration = engineInfo.distance / engineInfo.velocity;
+      animateCar(car, duration, index + 1, winnerTaken);
+    });
   };
 
   const startEngine = async (car: Car, garagePosition: number) => {
+    if (raceStates[car.id]?.isRacing) return;
 
-    if (runningRef.current[car.id]) return;
+    const engineInfo = await api.startEngine(car.id);
+    const duration = engineInfo.distance / engineInfo.velocity;
 
-    try {
-      const engine = await api.startEngine(car.id);
-
-      runningRef.current[car.id] = true;
-      raceStatesRef.current = {
-        ...raceStatesRef.current,
-        [car.id]: { isRacing: true, progress: 0 }
-      };
-      setRaceStates(prev => ({
-        ...prev,
-        [car.id]: { isRacing: true, progress: 0 }
-      }));
-
-
-      const duration = engine.distance / engine.velocity; 
-      const startTime = performance.now();
-      let lastUpdate = 0;
-
-      const animate = () => {
-        if (!runningRef.current[car.id]) return;
-
-        const now = performance.now();
-        const elapsed = now - startTime;
-        const progress = Math.min((elapsed / duration) * 100, 100);
-
-
-        if (now - lastUpdate > 33) {
-          setRaceStates(prev => ({
-            ...prev,
-            [car.id]: { ...prev[car.id], progress }
-          }));
-          lastUpdate = now;
-        }
-
-        if (progress < 100 && runningRef.current[car.id]) {
-          rafRef.current[car.id] = requestAnimationFrame(animate);
-        } else {
-          runningRef.current[car.id] = false;
-          setRaceStates(prev => ({
-            ...prev,
-            [car.id]: { ...prev[car.id], progress: 100, finished: true, isRacing: false }
-          }));
-        }
-      };
-
-      rafRef.current[car.id] = requestAnimationFrame(animate);
-
-      const driveResult = await api.driveCar(car.id);
-
-      if (driveResult.success) {
-        const raceTime = (performance.now() - startTime) / 1000;
-
-        if (!winnerRef.current) {
-          winnerRef.current = true;
-          setWinnerDeclared(true);
-          setRaceWinner({ car, time: raceTime, garagePosition });
-          setShowWinnerPopup(true);
-
-          const localWinners = JSON.parse(localStorage.getItem('localWinners') || '{}');
-          localWinners[car.id] = raceTime;
-          localStorage.setItem('localWinners', JSON.stringify(localWinners));
-
-          await api.saveWinner(car.id, raceTime, garagePosition);
-
-          cars.forEach(c => {
-            if (c.id !== car.id) stopEngine(c);
-          });
-
-          setIsRacing(false);
-        }
-      } else {
-
-        runningRef.current[car.id] = false;
-        if (rafRef.current[car.id]) {
-          cancelAnimationFrame(rafRef.current[car.id]!);
-          rafRef.current[car.id] = null;
-        }
-        setRaceStates(prev => ({
-          ...prev,
-          [car.id]: { ...prev[car.id], isRacing: false }
-        }));
-      }
-    } catch (error) {
-      console.error('Failed to start engine:', error);
-      runningRef.current[car.id] = false;
-      if (rafRef.current[car.id]) {
-        cancelAnimationFrame(rafRef.current[car.id]!);
-        rafRef.current[car.id] = null;
-      }
-    }
+    animateCar(car, duration, garagePosition, { value: !!raceWinner });
   };
 
-  const startRace = () => {
-    setIsRacing(true);
-    setRaceWinner(null);
-    setWinnerDeclared(false);
-    winnerRef.current = false;
-
-
-    setRaceStates({});
-    runningRef.current = {};
-    Object.values(rafRef.current).forEach(id => id && cancelAnimationFrame(id));
-    rafRef.current = {};
-
-    cars.forEach((car, index) => {
-      const garagePosition = index + 1;
-      setTimeout(() => startEngine(car, garagePosition), index * 100);
-    });
-  };
-
-  const resetRace = () => {
+  const resetRace = async () => {
     setIsRacing(false);
     setRaceWinner(null);
-    setWinnerDeclared(false);
 
 
-    Object.values(rafRef.current).forEach(id => id && cancelAnimationFrame(id));
-    rafRef.current = {};
-    cars.forEach(car => {
-      runningRef.current[car.id] = false;
-      stopEngine(car);
-    });
-
+    await Promise.all(cars.map(car => stopEngine(car)));
     setRaceStates({});
   };
+
+
+  useEffect(() => {
+    (async () => {
+      await loadCars();
+    })();
+  }, [currentPage]);
+
+  useEffect(() => {
+    return () => {
+      if(intervals.current) {
+        Object.values(intervals.current).forEach((interval) => interval && clearInterval(interval))
+        intervals.current = {}
+      }
+    }
+  }, []);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -287,7 +202,7 @@ export const Garage: React.FC = () => {
         </button>
       </div>
 
- 
+
       {showWinnerPopup && raceWinner && (
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-400 text-black px-8 py-6 rounded-lg shadow-lg z-50 font-bold text-center">
           <div className="mb-4">
@@ -320,7 +235,7 @@ export const Garage: React.FC = () => {
             <CarTrack
               key={car.id}
               car={car}
-              onStart={() => startEngine(car, index + 1)}
+              onStart={() =>  startEngine(car, index + 1)}
               onStop={() => stopEngine(car)}
               onSelect={() => setSelectedCar(car)}
               onDelete={() => deleteCar(car.id)}
