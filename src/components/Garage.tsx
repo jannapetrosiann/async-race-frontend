@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { CarForm } from './CarForm';
 import { CarTrack } from './CarTrack';
 import { Pagination } from './Pagination';
-import { api } from '../api';
+import { api, saveWinner } from '../api';
 import { generateRandomCar } from '../utils';
 import type { Car } from '../types';
 
@@ -95,7 +95,8 @@ export const Garage: React.FC = () => {
             });
             return updated;
           });
-
+          
+          saveWinner(car.id, elapsed / 1000, garagePosition);
           setRaceWinner({ car, time: elapsed / 1000, garagePosition });
           setShowWinnerPopup(true);
           setIsRacing(false);
