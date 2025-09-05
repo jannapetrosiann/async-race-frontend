@@ -91,7 +91,7 @@ export const Garage: React.FC = () => {
           setRaceStates(prev => {
             const updated: Record<number, any> = {};
             Object.keys(prev).forEach(id => {
-              updated[+id] = { ...prev[+id], finished: true, isRacing: false, progress: 100 };
+              updated[+id] = { ...prev[+id], finished: true, isRacing: false };
             });
             return updated;
           });

@@ -1,7 +1,7 @@
 # Async Race - Score: 380/400 pts
 
 ##  Live Demo
-[https://cozy-pie-9b3ab9.netlify.app/](https://cozy-pie-9b3ab9.netlify.app/)
+
 
 ## GitHub Repo : https://github.com/jannapetrosiann/async-race-frontend.git
 
