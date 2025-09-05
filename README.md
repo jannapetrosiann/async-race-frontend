@@ -1,6 +1,8 @@
 # Async Race - Score: 380/400 pts
 
 ##  Live Demo
+## 🚀 Live Demo
+[Open on Netlify](https://celebrated-platypus-b60e87.netlify.app )
 
 
 ## GitHub Repo : https://github.com/jannapetrosiann/async-race-frontend.git
